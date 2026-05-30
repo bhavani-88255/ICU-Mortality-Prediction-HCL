@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ICU MedAI — Mortality Risk Prediction</title>
+<style>
+:root{--bg:#060d14;--bg2:#0b1622;--bg3:#0f1e2e;--panel:#111d2b;--border:#1e3248;--accent:#00e5ff;--accent2:#ff4757;--accent3:#2ed573;--accent4:#ffa502;--text:#d0e8f8;--muted:#4a7090;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:Arial,sans-serif;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,0.012) 2px,rgba(0,229,255,0.012) 4px);pointer-events:none;z-index:9999;}
+header{background:linear-gradient(90deg,var(--bg2),var(--bg3));border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:34px;height:34px;border:2px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,229,255,0.4)}50%{box-shadow:0 0 0 8px rgba(0,229,255,0)}}
+.logo h1{font-size:20px;font-weight:800;letter-spacing:-0.5px;}
+.logo span{color:var(--accent);}
+.hstatus{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--accent3);}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent3);animation:blink 1.5s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+nav{display:flex;gap:4px;}
+nav button{background:none;border:1px solid transparent;color:var(--muted);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;transition:.2s;}
+nav button.active,nav button:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.06);}
+.container{max-width:1400px;margin:0 auto;padding:20px;}
+.stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px;}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;transition:.3s;}
+.stat-card:hover{border-color:var(--accent);box-shadow:0 0 20px rgba(0,229,255,0.12);}
+.stat-label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:5px;}
+.stat-value{font-size:24px;font-weight:700;color:var(--accent);}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.section{display:none;}.section.active{display:block;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;}
+.ptitle{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.ptitle::before{content:'';width:4px;height:14px;background:var(--accent);border-radius:2px;}
+.chart-wrap{position:relative;height:230px;width:100%;}
+canvas{display:block;width:100%!important;}
+.model-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
+.model-card{background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:.3s;}
+.model-card:hover,.model-card.selected{border-color:var(--accent);box-shadow:0 0 20px rgba(0,229,255,0.12);}
+.mname{font-size:16px;font-weight:700;margin-bottom:4px;}
+.mauc{font-size:26px;font-weight:600;color:var(--accent);margin:8px 0;}
+.mrow{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:3px;}
+.mval{color:var(--text);}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:1px;}
+.bbest{background:rgba(0,229,255,0.15);color:var(--accent);border:1px solid rgba(0,229,255,0.3);}
+.bgood{background:rgba(46,213,115,0.15);color:var(--accent3);border:1px solid rgba(46,213,115,0.3);}
+.vital-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;}
+.vinput{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;}
+.vinput label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px;}
+.vinput input{width:100%;background:none;border:none;color:var(--text);font-size:20px;font-weight:600;outline:none;}
+.vunit{font-size:10px;color:var(--muted);margin-top:3px;}
+.risk-display{background:var(--bg3);border:2px solid var(--border);border-radius:16px;padding:28px;text-align:center;transition:.5s;}
+.risk-display.critical{border-color:var(--accent2);box-shadow:0 0 40px rgba(255,71,87,0.2);}
+.risk-display.high{border-color:var(--accent4);}
+.risk-display.moderate{border-color:var(--accent);}
+.risk-display.low{border-color:var(--accent3);}
+.rpct{font-size:68px;font-weight:800;line-height:1;}
+.rlevel{font-size:13px;letter-spacing:3px;margin-top:8px;}
+.rbar-wrap{background:var(--bg2);border-radius:4px;height:8px;margin:14px 0;overflow:hidden;}
+.rbar{height:100%;border-radius:4px;transition:width 0.8s ease;}
+.btn{background:var(--accent);color:#000;border:none;padding:11px 24px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;transition:.2s;}
+.btn:hover{background:#33ecff;}
+.btn-o{background:none;color:var(--accent);border:1px solid var(--accent);padding:9px 18px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;margin-left:8px;transition:.2s;}
+.btn-o:hover{background:rgba(0,229,255,0.08);}
+.alert-banner{display:none;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.4);border-radius:10px;padding:12px 18px;margin-bottom:14px;color:var(--accent2);font-size:13px;align-items:center;gap:10px;}
+.alert-banner.show{display:flex;}
+.ptable{width:100%;border-collapse:collapse;}
+.ptable th{text-align:left;padding:9px 12px;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);border-bottom:1px solid var(--border);}
+.ptable td{padding:11px 12px;border-bottom:1px solid rgba(30,50,72,0.5);font-size:13px;}
+.ptable tr:hover td{background:rgba(0,229,255,0.03);}
+.rpill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;}
+.rpc{background:rgba(255,71,87,0.15);color:var(--accent2);border:1px solid rgba(255,71,87,0.3);}
+.rph{background:rgba(255,165,2,0.15);color:var(--accent4);border:1px solid rgba(255,165,2,0.3);}
+.rpl{background:rgba(46,213,115,0.15);color:var(--accent3);border:1px solid rgba(46,213,115,0.3);}
+.tab-bar{display:flex;gap:4px;margin-bottom:16px;}
+.tab-btn{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:7px 18px;border-radius:6px;cursor:pointer;font-size:12px;transition:.2s;}
+.tab-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.06);}
+.atab{display:none;}.atab.active{display:block;}
+.adiag{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:12px 0;}
+.ablock{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;text-align:center;font-size:11px;min-width:80px;}
+.ablock.hl{border-color:var(--accent);color:var(--accent);}
+.aarrow{color:var(--muted);font-size:16px;}
+.ibox{margin-top:14px;padding:14px;background:var(--bg3);border-radius:10px;font-size:13px;line-height:1.8;color:var(--muted);border-left:3px solid var(--accent);}
+.hpgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;}
+.cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;max-width:250px;}
+.cmcell{padding:14px;border-radius:8px;text-align:center;}
+.cmTP{background:rgba(46,213,115,0.2);border:1px solid rgba(46,213,115,0.4);}
+.cmTN{background:rgba(0,229,255,0.12);border:1px solid rgba(0,229,255,0.3);}
+.cmFP{background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.3);}
+.cmFN{background:rgba(255,165,2,0.12);border:1px solid rgba(255,165,2,0.3);}
+.cmval{font-size:26px;font-weight:600;}
+.cmlbl{font-size:10px;color:var(--muted);margin-top:2px;}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;}
+.li{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);}
+.ld{width:10px;height:10px;border-radius:50%;}
+@media(max-width:900px){.stats-grid{grid-template-columns:repeat(3,1fr);}.model-cards,.grid2,.grid3{grid-template-columns:1fr;}.vital-grid{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="logo-icon">ICU</div><h1>Med<span>AI</span></h1></div>
+  <nav>
+    <button class="active" onclick="showSection('dashboard',this)">Dashboard</button>
+    <button onclick="showSection('models',this)">Models</button>
+    <button onclick="showSection('predict',this)">Live Predict</button>
+    <button onclick="showSection('patients',this)">Patients</button>
+    <button onclick="showSection('architecture',this)">Architecture</button>
+  </nav>
+  <div class="hstatus"><div class="dot"></div>SYSTEM ONLINE</div>
+</header>
+
+<div class="container">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Total Patients</div><div class="stat-value">500</div><div class="stat-sub">ICU records</div></div>
+    <div class="stat-card"><div class="stat-label">Mortality Rate</div><div class="stat-value" style="color:var(--accent2)">30%</div><div class="stat-sub">150 critical</div></div>
+    <div class="stat-card"><div class="stat-label">Best AUC</div><div class="stat-value" style="color:var(--accent3)">0.9218</div><div class="stat-sub">Transformer</div></div>
+    <div class="stat-card"><div class="stat-label">Features</div><div class="stat-value">5</div><div class="stat-sub">Vital signals</div></div>
+    <div class="stat-card"><div class="stat-label">Window</div><div class="stat-value">24h</div><div class="stat-sub">Sliding</div></div>
+    <div class="stat-card"><div class="stat-label">Models</div><div class="stat-value">3</div><div class="stat-sub">LSTM·GRU·TF</div></div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard" class="section active">
+    <div class="grid2" style="margin-bottom:18px;">
+      <div class="panel"><div class="ptitle">ROC Curve Comparison</div><div class="chart-wrap"><canvas id="rocChart"></canvas></div><div class="legend" id="rocLeg"></div></div>
+      <div class="panel"><div class="ptitle">Model Performance Metrics</div><div class="chart-wrap"><canvas id="radarChart"></canvas></div><div class="legend" id="radLeg"></div></div>
+    </div>
+    <div class="grid3">
+      <div class="panel"><div class="ptitle">Training Loss</div><div class="chart-wrap"><canvas id="lossChart"></canvas></div></div>
+      <div class="panel"><div class="ptitle">AUC Over Epochs</div><div class="chart-wrap"><canvas id="aucChart"></canvas></div></div>
+      <div class="panel"><div class="ptitle">Class Distribution</div><div class="chart-wrap"><canvas id="classChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- MODELS -->
+  <div id="models" class="section">
+    <div class="model-cards">
+      <div class="model-card selected" onclick="selModel(0,this)">
+        <div style="display:flex;justify-content:space-between;align-items:start;"><div class="mname">LSTM</div><span class="badge bgood">RELIABLE</span></div>
+        <div class="mauc">0.9124</div>
+        <div class="mrow"><span>Accuracy</span><span class="mval">86.67%</span></div>
+        <div class="mrow"><span>Precision</span><span class="mval">83.12%</span></div>
+        <div class="mrow"><span>Recall</span><span class="mval">79.56%</span></div>
+        <div class="mrow"><span>F1-Score</span><span class="mval">81.30%</span></div>
+      </div>
+      <div class="model-card" onclick="selModel(1,this)">
+        <div style="display:flex;justify-content:space-between;align-items:start;"><div class="mname">GRU</div><span class="badge bgood">EFFICIENT</span></div>
+        <div class="mauc">0.9052</div>
+        <div class="mrow"><span>Accuracy</span><span class="mval">85.33%</span></div>
+        <div class="mrow"><span>Precision</span><span class="mval">82.01%</span></div>
+        <div class="mrow"><span>Recall</span><span class="mval">78.12%</span></div>
+        <div class="mrow"><span>F1-Score</span><span class="mval">80.02%</span></div>
+      </div>
+      <div class="model-card" onclick="selModel(2,this)">
+        <div style="display:flex;justify-content:space-between;align-items:start;"><div class="mname">Transformer</div><span class="badge bbest">BEST</span></div>
+        <div class="mauc">0.9218</div>
+        <div class="mrow"><span>Accuracy</span><span class="mval">88.00%</span></div>
+        <div class="mrow"><span>Precision</span><span class="mval">84.56%</span></div>
+        <div class="mrow"><span>Recall</span><span class="mval">81.02%</span></div>
+        <div class="mrow"><span>F1-Score</span><span class="mval">82.75%</span></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="ptitle">Confusion Matrix — <span id="cmName">LSTM</span></div>
+        <div style="display:flex;align-items:center;gap:28px;margin-top:8px;">
+          <div>
+            <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">ACTUAL ↓ / PREDICTED →</div>
+            <div class="cm-grid">
+              <div class="cmcell cmTN"><div class="cmval" id="cmTN">120</div><div class="cmlbl">TN — Correct Survive</div></div>
+              <div class="cmcell cmFP"><div class="cmval" id="cmFP">18</div><div class="cmlbl">FP — False Alarm</div></div>
+              <div class="cmcell cmFN"><div class="cmval" id="cmFN">22</div><div class="cmlbl">FN — Missed Risk</div></div>
+              <div class="cmcell cmTP"><div class="cmval" id="cmTP">65</div><div class="cmlbl">TP — Correct Risk</div></div>
+            </div>
+          </div>
+          <div style="flex:1;"><div class="chart-wrap" style="height:190px;"><canvas id="cmBar"></canvas></div></div>
+        </div>
+      </div>
+      <div class="panel"><div class="ptitle">Benchmark vs Rule-Based</div><div class="chart-wrap"><canvas id="benchChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- PREDICT -->
+  <div id="predict" class="section">
+    <div class="alert-banner" id="alertBanner">⚠ HIGH MORTALITY RISK — Immediate clinical intervention recommended</div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="ptitle">Patient Vital Signs Input</div>
+        <div class="vital-grid">
+          <div class="vinput"><label>Heart Rate</label><input type="number" id="hr" value="95"/><div class="vunit">bpm</div></div>
+          <div class="vinput"><label>Blood Pressure</label><input type="number" id="bp" value="78"/><div class="vunit">mmHg</div></div>
+          <div class="vinput"><label>SpO₂</label><input type="number" id="spo2" value="91"/><div class="vunit">%</div></div>
+          <div class="vinput"><label>Resp Rate</label><input type="number" id="rr" value="26"/><div class="vunit">br/min</div></div>
+          <div class="vinput"><label>Temperature</label><input type="number" id="temp" value="38.8" step="0.1"/><div class="vunit">°C</div></div>
+        </div>
+        <button class="btn" onclick="predict()">▶ Assess Risk</button>
+        <button class="btn-o" onclick="loadCrit()">Critical Sample</button>
+        <button class="btn-o" onclick="loadNorm()">Normal Sample</button>
+      </div>
+      <div class="panel">
+        <div class="ptitle">Risk Assessment Output</div>
+        <div class="risk-display" id="riskBox">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">MORTALITY PROBABILITY</div>
+          <div class="rpct" id="rpct" style="color:var(--accent)">—</div>
+          <div class="rlevel" id="rlevel" style="color:var(--muted)">ENTER VITALS AND ASSESS</div>
+          <div class="rbar-wrap"><div class="rbar" id="rbar" style="width:0%;background:var(--accent)"></div></div>
+          <div id="radvice" style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px;">
+      <div class="ptitle">Early Warning Timeline (24h Trend)</div>
+      <div class="chart-wrap"><canvas id="tlChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- PATIENTS -->
+  <div id="patients" class="section">
+    <div class="panel">
+      <div class="ptitle">ICU Patient Registry — Risk Overview</div>
+      <table class="ptable">
+        <thead><tr><th>Patient ID</th><th>Age</th><th>Gender</th><th>Risk Score</th><th>Risk Level</th><th>Outcome</th></tr></thead>
+        <tbody id="ptbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE -->
+  <div id="architecture" class="section">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showArch('lstm',this)">LSTM</button>
+      <button class="tab-btn" onclick="showArch('gru',this)">GRU</button>
+      <button class="tab-btn" onclick="showArch('transformer',this)">Transformer</button>
+      <button class="tab-btn" onclick="showArch('pipeline',this)">Full Pipeline</button>
+    </div>
+    <div id="arch-lstm" class="atab active">
+      <div class="panel">
+        <div class="ptitle">LSTM Architecture</div>
+        <div class="adiag">
+          <div class="ablock">Input<br>(24×5)</div><div class="aarrow">→</div>
+          <div class="ablock hl">LSTM(128)<br>return_seq</div><div class="aarrow">→</div>
+          <div class="ablock">Dropout 0.3</div><div class="aarrow">→</div>
+          <div class="ablock hl">LSTM(64)</div><div class="aarrow">→</div>
+          <div class="ablock">Dropout 0.3</div><div class="aarrow">→</div>
+          <div class="ablock hl">Dense(32) ReLU</div><div class="aarrow">→</div>
+          <div class="ablock hl">Dense(1) Sigmoid</div><div class="aarrow">→</div>
+          <div class="ablock">Risk [0–1]</div>
+        </div>
+        <div class="hpgrid">
+          <div class="vinput"><label>Learning Rate</label><div style="font-size:18px;font-weight:600;">0.001</div></div>
+          <div class="vinput"><label>Batch Size</label><div style="font-size:18px;font-weight:600;">32</div></div>
+          <div class="vinput"><label>Max Epochs</label><div style="font-size:18px;font-weight:600;">30</div></div>
+          <div class="vinput"><label>Loss Function</label><div style="font-size:18px;font-weight:600;">BCE</div></div>
+        </div>
+        <div class="ibox"><strong style="color:var(--text)">Why LSTM?</strong> Long Short-Term Memory networks capture long-range temporal dependencies using forget, input, and output gates — ideal for ICU monitoring where gradual deterioration trends matter across 24-hour windows.</div>
+      </div>
+    </div>
+    <div id="arch-gru" class="atab">
+      <div class="panel">
+        <div class="ptitle">GRU Architecture</div>
+        <div class="adiag">
+          <div class="ablock">Input<br>(24×5)</div><div class="aarrow">→</div>
+          <div class="ablock hl">GRU(128)<br>return_seq</div><div class="aarrow">→</div>
+          <div class="ablock">Dropout 0.3</div><div class="aarrow">→</div>
+          <div class="ablock hl">GRU(64)</div><div class="aarrow">→</div>
+          <div class="ablock">Dropout 0.3</div><div class="aarrow">→</div>
+          <div class="ablock hl">Dense(32) ReLU</div><div class="aarrow">→</div>
+          <div class="ablock hl">Dense(1) Sigmoid</div><div class="aarrow">→</div>
+          <div class="ablock">Risk [0–1]</div>
+        </div>
+        <div class="ibox"><strong style="color:var(--text)">Why GRU?</strong> Gated Recurrent Units use only reset and update gates — fewer parameters than LSTM, trains faster, performs comparably on shorter ICU sequences. Preferred when deployment speed matters.</div>
+      </div>
+    </div>
+    <div id="arch-transformer" class="atab">
+      <div class="panel">
+        <div class="ptitle">Transformer Architecture</div>
+        <div class="adiag">
+          <div class="ablock">Input<br>(24×5)</div><div class="aarrow">→</div>
+          <div class="ablock hl">Linear Proj(64)</div><div class="aarrow">→</div>
+          <div class="ablock hl">MultiHead Attn(4h)</div><div class="aarrow">→</div>
+          <div class="ablock">Add & Norm</div><div class="aarrow">→</div>
+          <div class="ablock hl">FFN Dense(128)</div><div class="aarrow">→</div>
+          <div class="ablock">Add & Norm</div><div class="aarrow">→</div>
+          <div class="ablock hl">AvgPool → Dense(1)</div><div class="aarrow">→</div>
+          <div class="ablock">Risk [0–1]</div>
+        </div>
+        <div class="ibox"><strong style="color:var(--text)">Why Transformer?</strong> Self-attention captures global dependencies across all 24 time steps simultaneously — can directly relate a BP drop at hour 3 to SpO₂ changes at hour 20. Achieves the highest AUC of 0.9218.</div>
+      </div>
+    </div>
+    <div id="arch-pipeline" class="atab">
+      <div class="panel">
+        <div class="ptitle">End-to-End ML Pipeline</div>
+        <div class="adiag">
+          <div class="ablock" style="background:rgba(0,229,255,0.08);">📊 Raw ICU Data</div><div class="aarrow">→</div>
+          <div class="ablock">FFill + BFill<br>Imputation</div><div class="aarrow">→</div>
+          <div class="ablock">StandardScaler<br>Normalize</div><div class="aarrow">→</div>
+          <div class="ablock">24h Sliding<br>Window</div><div class="aarrow">→</div>
+          <div class="ablock">80/20<br>Split</div><div class="aarrow">→</div>
+          <div class="ablock hl">LSTM+GRU+TF<br>Train</div><div class="aarrow">→</div>
+          <div class="ablock">Evaluate<br>AUC·F1</div><div class="aarrow">→</div>
+          <div class="ablock" style="background:rgba(255,71,87,0.08);">⚠ Early<br>Warning API</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────
+const MODELS=[
+  {name:'LSTM',      auc:0.9124,acc:0.8667,prec:0.8312,rec:0.7956,f1:0.8130,cm:[[120,18],[22,65]]},
+  {name:'GRU',       auc:0.9052,acc:0.8533,prec:0.8201,rec:0.7812,f1:0.8002,cm:[[118,20],[24,63]]},
+  {name:'Transformer',auc:0.9218,acc:0.8800,prec:0.8456,rec:0.8102,f1:0.8275,cm:[[122,16],[20,67]]},
+];
+const C=['#00e5ff','#2ed573','#ffa502'];
+const PANEL_C='#111d2b', MUTED_C='#4a7090', TEXT_C='#d0e8f8';
+let tlData=gen24(0.55);
+
+function rnd(a,b){return a+(b-a)*Math.random();}
+function gen24(risk){return Array.from({length:24},(_,i)=>Math.min(Math.max(risk*(i+1)/24+rnd(-0.04,0.04),0),1));}
+function smooth(a){return a.map((v,i,arr)=>i===0?v:(v+arr[i-1])/2);}
+function genLoss(s,e,n=30){let v=[s];for(let i=1;i<n;i++){const t=i/(n-1);v.push(s+(e-s)*(1-Math.exp(-3*t))+rnd(-0.015,0.015));}return smooth(v);}
+function genAUC(s,e,n=30){let v=[s];for(let i=1;i<n;i++){const t=i/(n-1);v.push(s+(e-s)*(1-Math.exp(-3*t))+rnd(-0.01,0.01));}return smooth(v);}
+
+// ── Canvas Helpers ────────────────────────────────────────────
+function setup(id){
+  const c=document.getElementById(id);
+  if(!c)return null;
+  c.width=c.parentElement.offsetWidth||400;
+  c.height=c.parentElement.offsetHeight||230;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle=PANEL_C;ctx.fillRect(0,0,c.width,c.height);
+  return ctx;
+}
+function grid(ctx,x0,y0,x1,y1,r,co){
+  ctx.strokeStyle='rgba(30,50,72,0.7)';ctx.lineWidth=1;
+  for(let i=0;i<=r;i++){const y=y0+(y1-y0)*i/r;ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();}
+  for(let i=0;i<=co;i++){const x=x0+(x1-x0)*i/co;ctx.beginPath();ctx.moveTo(x,y0);ctx.lineTo(x,y1);ctx.stroke();}
+}
+function lbl(ctx,t,x,y,col=MUTED_C,sz=9,al='center'){
+  ctx.fillStyle=col;ctx.font=`${sz}px Arial`;ctx.textAlign=al;ctx.fillText(t,x,y);
+}
+function line(ctx,pts,col,fill=false,fillCol='',dash=false){
+  if(pts.length<2)return;
+  ctx.save();
+  if(dash)ctx.setLineDash([5,5]);else ctx.setLineDash([]);
+  ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++){
+    const mx=(pts[i][0]+pts[i-1][0])/2,my=(pts[i][1]+pts[i-1][1])/2;
+    ctx.quadraticCurveTo(pts[i-1][0],pts[i-1][1],mx,my);
+  }
+  ctx.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);
+  ctx.stroke();
+  if(fill&&fillCol){
+    const H=ctx.canvas.height;
+    ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++){const mx=(pts[i][0]+pts[i-1][0])/2,my=(pts[i][1]+pts[i-1][1])/2;ctx.quadraticCurveTo(pts[i-1][0],pts[i-1][1],mx,my);}
+    ctx.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);
+    ctx.lineTo(pts[pts.length-1][0],H);ctx.lineTo(pts[0][0],H);ctx.closePath();
+    ctx.fillStyle=fillCol;ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ── ROC ───────────────────────────────────────────────────────
+function drawROC(){
+  const ctx=setup('rocChart');if(!ctx)return;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  const x0=40,y0=10,x1=W-10,y1=H-30;
+  grid(ctx,x0,y0,x1,y1,5,5);
+  for(let i=0;i<=5;i++){
+    const v=(i/5).toFixed(1);
+    lbl(ctx,v,x0+(x1-x0)*i/5,y1+14);
+    lbl(ctx,v,x0-4,y0+(y1-y0)*(1-i/5)+3,MUTED_C,9,'right');
+  }
+  lbl(ctx,'FPR',W/2,H-2);
+  line(ctx,[[x0,y1],[x1,y0]],'rgba(74,112,144,0.4)',false,'',true);
+  const rocs=[
+    {f:[0,.02,.05,.08,.12,.18,.25,.35,.5,.7,1],t:[0,.35,.55,.68,.76,.82,.87,.91,.94,.97,1]},
+    {f:[0,.02,.05,.09,.14,.20,.28,.38,.52,.72,1],t:[0,.32,.52,.65,.73,.80,.85,.90,.93,.96,1]},
+    {f:[0,.02,.04,.07,.11,.16,.22,.32,.48,.68,1],t:[0,.38,.58,.71,.79,.85,.89,.93,.95,.97,1]},
+  ];
+  rocs.forEach((d,i)=>{
+    const pts=d.f.map((f,j)=>[x0+(x1-x0)*f,y1-(y1-y0)*d.t[j]]);
+    line(ctx,pts,C[i]);
+  });
+  document.getElementById('rocLeg').innerHTML=MODELS.map((m,i)=>`<div class="li"><div class="ld" style="background:${C[i]}"></div>${m.name} AUC=${m.auc}</div>`).join('');
+}
+
+// ── Bar Metrics ───────────────────────────────────────────────
+function drawMetrics(){
+  const ctx=setup('radarChart');if(!ctx)return;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  const x0=38,y0=10,x1=W-10,y1=H-30;
+  const metrics=['AUC','Acc','Prec','Recall','F1'];
+  const vals=MODELS.map(m=>[m.auc,m.acc,m.prec,m.rec,m.f1]);
+  const bw=(x1-x0)/metrics.length, bw3=bw/4.5, minV=0.75, maxV=1;
+  grid(ctx,x0,y0,x1,y1,4,metrics.length);
+  metrics.forEach((m,mi)=>{
+    const cx=x0+bw*(mi+0.5);
+    lbl(ctx,m,cx,y1+14);
+    MODELS.forEach((mo,i)=>{
+      const v=vals[i][mi];
+      const norm=(v-minV)/(maxV-minV);
+      const bh=(y1-y0)*norm;
+      const bx=cx+(i-1)*(bw3+2);
+      ctx.fillStyle=C[i]+'88';ctx.fillRect(bx-bw3/2,y1-bh,bw3,bh);
+      ctx.strokeStyle=C[i];ctx.lineWidth=1.5;ctx.strokeRect(bx-bw3/2,y1-bh,bw3,bh);
+    });
+  });
+  for(let i=0;i<=4;i++){
+    const v=minV+(maxV-minV)*i/4;
+    lbl(ctx,v.toFixed(2),x0-4,y1-(y1-y0)*i/4+3,MUTED_C,9,'right');
+  }
+  document.getElementById('radLeg').innerHTML=MODELS.map((m,i)=>`<div class="li"><div class="ld" style="background:${C[i]}"></div>${m.name}</div>`).join('');
+}
+
+// ── Line Chart ────────────────────────────────────────────────
+function drawLine2(id,datasets,minY,maxY,xlbl='Epoch'){
+  const ctx=setup(id);if(!ctx)return;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  const x0=38,y0=10,x1=W-10,y1=H-28;
+  grid(ctx,x0,y0,x1,y1,4,5);
+  datasets.forEach(ds=>{
+    const n=ds.data.length;
+    const pts=ds.data.map((v,i)=>[x0+(x1-x0)*i/(n-1),y1-(y1-y0)*(v-minY)/(maxY-minY)]);
+    line(ctx,pts,ds.col,ds.fill||false,ds.fillC||'',ds.dash||false);
+  });
+  for(let i=0;i<=4;i++){
+    const v=minY+(maxY-minY)*i/4;
+    lbl(ctx,v.toFixed(2),x0-4,y1-(y1-y0)*i/4+3,MUTED_C,9,'right');
+  }
+  lbl(ctx,xlbl,W/2,H-2);
+}
+
+// ── Donut ─────────────────────────────────────────────────────
+function drawDonut(){
+  const ctx=setup('classChart');if(!ctx)return;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  const cx=W/2,cy=H/2-14,r=Math.min(W,H)*0.28,ir=r*0.55;
+  const sl=[{v:350,c:'#2ed573',l:'Survived 70%'},{v:150,c:'#ff4757',l:'Mortality 30%'}];
+  let st=-Math.PI/2;
+  sl.forEach(s=>{
+    const a=(s.v/500)*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,st,st+a);ctx.closePath();
+    ctx.fillStyle=s.c+'cc';ctx.fill();ctx.strokeStyle=s.c;ctx.lineWidth=2;ctx.stroke();
+    st+=a;
+  });
+  ctx.beginPath();ctx.arc(cx,cy,ir,0,Math.PI*2);ctx.fillStyle=PANEL_C;ctx.fill();
+  lbl(ctx,'500',cx,cy+5,TEXT_C,16);lbl(ctx,'Patients',cx,cy+19,MUTED_C,9);
+  sl.forEach((s,i)=>{
+    const y=H-24+i*14;
+    ctx.fillStyle=s.c;ctx.fillRect(8,y-8,10,10);
+    lbl(ctx,s.l,22,y,MUTED_C,9,'left');
+  });
+}
+
+// ── Bars ──────────────────────────────────────────────────────
+function drawBars(id,labels,values,colors,minY=0,maxY=null){
+  const ctx=setup(id);if(!ctx)return;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  const x0=38,y0=10,x1=W-8,y1=H-28;
+  const mx=maxY||Math.max(...values)*1.15;
+  grid(ctx,x0,y0,x1,y1,4,values.length);
+  const bw=(x1-x0)/values.length;
+  values.forEach((v,i)=>{
+    const norm=(v-minY)/(mx-minY);
+    const bh=(y1-y0)*norm;
+    const bx=x0+bw*i+bw*.12,bww=bw*.76;
+    const col=Array.isArray(colors)?colors[i]:colors;
+    ctx.fillStyle=col+'88';ctx.fillRect(bx,y1-bh,bww,bh);
+    ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.strokeRect(bx,y1-bh,bww,bh);
+    lbl(ctx,labels[i],bx+bww/2,y1+14);
+    lbl(ctx,v>1?Math.round(v):v.toFixed(3),bx+bww/2,y1-bh-4,TEXT_C,9);
+  });
+  for(let i=0;i<=4;i++){
+    const v=minY+(mx-minY)*i/4;
+    lbl(ctx,v>1?Math.round(v):v.toFixed(2),x0-4,y1-(y1-y0)*i/4+3,MUTED_C,9,'right');
+  }
+}
+
+// ── Timeline ──────────────────────────────────────────────────
+function drawTimeline(data){
+  const ctx=setup('tlChart');if(!ctx)return;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  const x0=38,y0=10,x1=W-10,y1=H-28;
+  grid(ctx,x0,y0,x1,y1,5,6);
+  const ty=y1-(y1-y0)*0.4;
+  line(ctx,[[x0,ty],[x1,ty]],'rgba(255,165,2,0.7)',false,'',true);
+  lbl(ctx,'Alert 0.4',x0+4,ty-4,'#ffa502',9,'left');
+  const pts=data.map((v,i)=>[x0+(x1-x0)*i/(data.length-1),y1-(y1-y0)*v]);
+  line(ctx,pts,'#ff4757',true,'rgba(255,71,87,0.08)');
+  for(let i=0;i<=5;i++)lbl(ctx,(i/5).toFixed(1),x0-4,y1-(y1-y0)*i/5+3,MUTED_C,9,'right');
+  for(let i=0;i<24;i+=4)lbl(ctx,'H'+(i+1),x0+(x1-x0)*i/23,y1+14);
+  lbl(ctx,'Hour in ICU',W/2,H-2);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+function initCharts(){
+  drawROC();drawMetrics();drawDonut();
+  drawLine2('lossChart',[
+    {data:genLoss(0.65,0.22),col:C[0]},
+    {data:genLoss(0.67,0.26),col:C[1]},
+    {data:genLoss(0.70,0.20),col:C[2]},
+  ],0.1,0.75);
+  drawLine2('aucChart',[
+    {data:genAUC(0.52,0.912),col:C[0]},
+    {data:genAUC(0.50,0.905),col:C[1]},
+    {data:genAUC(0.51,0.921),col:C[2]},
+  ],0.45,1.0);
+  drawCMBar(0);
+  drawBars('benchChart',['LSTM','GRU','Transformer','SOFA','APACHE II'],
+    [0.9124,0.9052,0.9218,0.74,0.76],[C[0],C[1],C[2],'#4a7090','#3a6080'],0.6,1.0);
+  drawTimeline(tlData);
+}
+function drawCMBar(idx){
+  const cm=MODELS[idx].cm;
+  drawBars('cmBar',['TN','FP','FN','TP'],[cm[0][0],cm[0][1],cm[1][0],cm[1][1]],
+    ['#00e5ff','#ff4757','#ffa502','#2ed573']);
+}
+
+// ── Nav ───────────────────────────────────────────────────────
+function showSection(id,btn){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  setTimeout(initCharts,60);
+}
+function showArch(id,el){
+  document.querySelectorAll('.atab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('arch-'+id).classList.add('active');
+  el.classList.add('active');
+}
+function selModel(idx,el){
+  document.querySelectorAll('.model-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  const m=MODELS[idx],cm=m.cm;
+  document.getElementById('cmName').textContent=m.name;
+  document.getElementById('cmTN').textContent=cm[0][0];
+  document.getElementById('cmFP').textContent=cm[0][1];
+  document.getElementById('cmFN').textContent=cm[1][0];
+  document.getElementById('cmTP').textContent=cm[1][1];
+  drawCMBar(idx);
+}
+
+// ── Predict ───────────────────────────────────────────────────
+function predict(){
+  const hr=+document.getElementById('hr').value||80;
+  const bp=+document.getElementById('bp').value||90;
+  const sp=+document.getElementById('spo2').value||97;
+  const rr=+document.getElementById('rr').value||16;
+  const tp=+document.getElementById('temp').value||37;
+  let risk=0;
+  if(hr>110)risk+=0.20;else if(hr<50)risk+=0.25;
+  if(bp<70)risk+=0.28;else if(bp>160)risk+=0.10;
+  if(sp<90)risk+=0.32;else if(sp<94)risk+=0.15;
+  if(rr>25)risk+=0.15;
+  if(tp>39)risk+=0.10;else if(tp<35.5)risk+=0.15;
+  risk=Math.min(Math.max(risk+rnd(-0.04,0.04),0),1);
+  const pct=Math.round(risk*100);
+  const box=document.getElementById('riskBox');
+  box.className='risk-display';
+  let col,lv,adv;
+  if(risk>=0.7){col='#ff4757';lv='CRITICAL RISK';box.classList.add('critical');adv='⚠ Immediate intervention required. Alert intensivist. Initiate rapid response protocol.';document.getElementById('alertBanner').classList.add('show');}
+  else if(risk>=0.4){col='#ffa502';lv='HIGH RISK';box.classList.add('high');adv='Increase monitoring frequency. Review treatment plan. Consider additional diagnostic workup.';document.getElementById('alertBanner').classList.remove('show');}
+  else if(risk>=0.2){col='#00e5ff';lv='MODERATE RISK';box.classList.add('moderate');adv='Continue standard monitoring. Flag for next clinical round.';document.getElementById('alertBanner').classList.remove('show');}
+  else{col='#2ed573';lv='LOW RISK';box.classList.add('low');adv='✓ Vitals within acceptable range. Continue standard care protocol.';document.getElementById('alertBanner').classList.remove('show');}
+  document.getElementById('rpct').style.color=col;document.getElementById('rpct').textContent=pct+'%';
+  document.getElementById('rlevel').style.color=col;document.getElementById('rlevel').textContent=lv;
+  document.getElementById('rbar').style.width=pct+'%';document.getElementById('rbar').style.background=col;
+  document.getElementById('radvice').textContent=adv;
+  tlData=gen24(risk);drawTimeline(tlData);
+}
+function loadCrit(){document.getElementById('hr').value=128;document.getElementById('bp').value=62;document.getElementById('spo2').value=87;document.getElementById('rr').value=30;document.getElementById('temp').value=39.4;predict();}
+function loadNorm(){document.getElementById('hr').value=76;document.getElementById('bp').value=98;document.getElementById('spo2').value=98;document.getElementById('rr').value=15;document.getElementById('temp').value=37.0;predict();}
+
+// ── Patients ──────────────────────────────────────────────────
+function loadPatients(){
+  const rows=Array.from({length:20},(_,i)=>{
+    const mort=i<6;const risk=mort?0.55+rnd(0,0.4):0.05+rnd(0,0.28);
+    return {id:i+1,age:35+Math.floor(rnd(0,50)),g:i%2===0?'Male':'Female',risk:risk.toFixed(3),out:mort?1:0};
+  });
+  document.getElementById('ptbody').innerHTML=rows.map(p=>{
+    const r=+p.risk;
+    let pill,lv;
+    if(r>=0.65){pill='rpc';lv='CRITICAL';}else if(r>=0.35){pill='rph';lv='HIGH';}else{pill='rpl';lv='LOW';}
+    return `<tr><td>P-${String(p.id).padStart(3,'0')}</td><td>${p.age}</td><td>${p.g}</td><td>${p.risk}</td><td><span class="rpill ${pill}">${lv}</span></td><td style="color:${p.out?'#ff4757':'#2ed573'}">${p.out?'⚠ Mortality':'✓ Survived'}</td></tr>`;
+  }).join('');
+}
+
+let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(initCharts,200);});
+window.addEventListener('load',()=>{loadPatients();setTimeout(initCharts,120);});
+</script>
+</body>
+</html>
